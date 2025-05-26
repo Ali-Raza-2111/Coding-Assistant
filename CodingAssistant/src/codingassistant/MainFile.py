@@ -157,6 +157,9 @@ Use the following rules to determine delegation:
 - If both are requested, handle each part separately using the correct agent.
 
 Your job is to **never confuse code with documentation**. Only code goes to Generating-Assistant. Only explanations and summaries go to Documentation-Assistant.
+
+
+first reply in chat if the user wants to store then use the agnets
 """.strip(),
     model=OpenAIChatCompletionsModel(
         model='gemini-2.0-flash',
