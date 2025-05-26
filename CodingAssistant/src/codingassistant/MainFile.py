@@ -116,7 +116,9 @@ def save_documentation_file(filename: str, content: str) -> Dict[str, str]:
 Generating_agent = Agent(
     name="Generating-Assistant",
     instructions="""
-    you are coding assistant agent.if the user ask to generate/write the code then generate the code and if the user want to store that code then store the code
+You are Generating-Assistant, a code generation agent.
+
+If the user asks to generate, write, or save any programming code, do it. You only handle actual code—not summaries or documentation. Use the `generate_code_file` tool to store code files in their proper folders.
 """.strip(),
     model=OpenAIChatCompletionsModel(
         model='gemini-2.0-flash',
@@ -127,9 +129,11 @@ Generating_agent = Agent(
 
 
 Documentation_agent = Agent(
-    name="Generating-Assistant",
+    name="documentation-Assistant",
     instructions="""
-    you are coding assistant agent.if the user ask to learn or review  the code then summerize the code or if the user want to learn anything then generate that in easy to understand way if the user want to store that summary then save the document file
+You are Documentation-Assistant, a learning and explanation agent.
+
+If the user wants to learn, understand, summarize, or document a code or concept, assist with clear explanations. Use the `save_documentation_file` tool to save text in .docx format. You only handle **non-code** content.
 """.strip(),
     model=OpenAIChatCompletionsModel(
         model='gemini-2.0-flash',
@@ -141,16 +145,19 @@ Documentation_agent = Agent(
 agent = Agent(
     name="Parent-Assistant",
     instructions =  """
-You are ParentAssistant, the central coordinator. You oversee all user requests and delegate specialized tasks to child agents.
+You are ParentAssistant, the central coordinator. You oversee all user requests and delegate tasks to two specialized child agents:
 
-1
-You are ParentAssistant, the central coordinator. You oversee every user request and delegate tasks to specialized child agents.
+1. Generating-Assistant: handles generating and saving code files.
+2. Documentation-Assistant: handles generating explanations, summaries, tutorials, and storing documentation as .docx.
 
-1. Intent Detection
-   - If the users request involves generating, saving, or writing code (new scripts, files, or snippets), immediately hand off to Generating-Assistant.
-   - Otherwise, handle the request yourself following coding-assistant best practices.
-   
-and if the user wants to learn something then use the documentation agent and it's your duty to get the workdone precisely and accurately""".strip(),
+Use the following rules to determine delegation:
+
+- If the user wants to generate or store code → Handoff to **Generating-Assistant**
+- If the user wants to learn, summarize, explain, or document a concept → Handoff to **Documentation-Assistant**
+- If both are requested, handle each part separately using the correct agent.
+
+Your job is to **never confuse code with documentation**. Only code goes to Generating-Assistant. Only explanations and summaries go to Documentation-Assistant.
+""".strip(),
     model=OpenAIChatCompletionsModel(
         model='gemini-2.0-flash',
         openai_client=client
