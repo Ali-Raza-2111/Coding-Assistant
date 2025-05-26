@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 from typing import Dict
+from docx import Document
 import chainlit as cl
 from agents import Agent, Runner, OpenAIChatCompletionsModel, function_tool,handoff
 from openai import AsyncOpenAI
@@ -68,6 +69,49 @@ def generate_code_file(language: str, filename: str, code: str) -> Dict[str, str
     except Exception as e:
         return {"message": f"❌ Failed to save code: {e}"}
 
+
+@function_tool
+def save_documentation_file(filename: str, content: str) -> Dict[str, str]:
+    """
+    Writes `content` into Documentation/<filename>.docx.
+
+    Parameters:
+      - filename (str): desired name, with or without .docx extension
+      - content (str): full documentation or explanation text
+
+    Returns:
+      - dict with 'message' and 'file_path'
+    """
+    try:
+        # Ensure .docx extension
+        name = filename.strip()
+        if not name.lower().endswith(".docx"):
+            name += ".docx"
+
+        # Prepare directory
+        dir_path = os.path.join("Documentation")
+        os.makedirs(dir_path, exist_ok=True)
+
+        # Full file path
+        file_path = os.path.join(dir_path, name)
+
+        # Create and save .docx
+        doc = Document()
+        for line in content.splitlines():
+            doc.add_paragraph(line)
+        doc.save(file_path)
+
+        return {
+            "message": f"✅ Documentation saved to '{file_path}'.",
+            "file_path": file_path
+        }
+
+    except Exception as e:
+        return {
+            "message": f"❌ Failed to save documentation: {e}"
+        }
+        
+
 # Define your agent with the tool included
 Generating_agent = Agent(
     name="Generating-Assistant",
@@ -81,6 +125,19 @@ Generating_agent = Agent(
     tools=[generate_code_file]  # Attach the tool
 )
 
+
+Documentation_agent = Agent(
+    name="Generating-Assistant",
+    instructions="""
+    you are coding assistant agent.if the user ask to learn or review  the code then summerize the code or if the user want to learn anything then generate that in easy to understand way if the user want to store that summary then save the document file
+""".strip(),
+    model=OpenAIChatCompletionsModel(
+        model='gemini-2.0-flash',
+        openai_client=client
+    ),
+    tools=[save_documentation_file]  # Attach the tool
+)
+
 agent = Agent(
     name="Parent-Assistant",
     instructions =  """
@@ -91,12 +148,14 @@ You are ParentAssistant, the central coordinator. You oversee every user request
 
 1. Intent Detection
    - If the users request involves generating, saving, or writing code (new scripts, files, or snippets), immediately hand off to Generating-Assistant.
-   - Otherwise, handle the request yourself following coding-assistant best practices.""".strip(),
+   - Otherwise, handle the request yourself following coding-assistant best practices.
+   
+and if the user wants to learn something then use the documentation agent and it's your duty to get the workdone precisely and accurately""".strip(),
     model=OpenAIChatCompletionsModel(
         model='gemini-2.0-flash',
         openai_client=client
     ),
-    handoffs=[Generating_agent],
+    handoffs=[Generating_agent,Documentation_agent],
 )
 #Chainlit chat history setup
 auto_history: list

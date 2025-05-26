@@ -4,3 +4,4 @@ openai-agents>=0.0.16
 fastapi>=0.110.0
 uvicorn[standard]>=0.29.0
 python-dotenv>=1.0.1
+python-docx>=0.8.11

@@ -1,40 +1,41 @@
 import os
 from dotenv import load_dotenv
-import chainlit as cl
 from typing import Dict
-from agents import Agent, Runner, OpenAIChatCompletionsModel, function_tool
+from docx import Document
+import chainlit as cl
+from agents import Agent, Runner, OpenAIChatCompletionsModel, function_tool,handoff
 from openai import AsyncOpenAI
 
 # Load environment variables
-dotenv_path = os.path.join(os.getcwd(), '.env')
-load_dotenv(dotenv_path)
+load_dotenv()
 
+# Get Gemini API key from environment
 gemini_api_key = os.getenv('GOOGLE_API_KEY')
-if not gemini_api_key:
-    raise ValueError("GOOGLE_API_KEY is not set in your .env")
 
-# Initialize Gemini-compatible OpenAI client
+# Initialize OpenAI client for Gemini endpoint
 client = AsyncOpenAI(
     api_key=gemini_api_key,
     base_url='https://generativelanguage.googleapis.com/v1beta/openai/'
 )
 
-# Mapping from language/type to file extension
+# mapping from language/type to file extension
 _EXTENSION_MAP = {
     "python": ".py",
     "javascript": ".js",
+    "ts": ".ts",
     "typescript": ".ts",
     "java": ".java",
     "c": ".c",
     "cpp": ".cpp",
+    "c++": ".cpp",
     "go": ".go",
     "ruby": ".rb",
     "bash": ".sh",
     "html": ".html",
     "css": ".css",
+    # add more as needed
 }
 
-# Function tool for generating code files
 @function_tool
 def generate_code_file(language: str, filename: str, code: str) -> Dict[str, str]:
     """
@@ -67,7 +68,51 @@ def generate_code_file(language: str, filename: str, code: str) -> Dict[str, str
         }
     except Exception as e:
         return {"message": f"❌ Failed to save code: {e}"}
-# Define the child agent for file generation
+
+
+@function_tool
+def save_documentation_file(filename: str, content: str) -> Dict[str, str]:
+    """
+    Writes `content` into Documentation/<filename>.docx.
+
+    Parameters:
+      - filename (str): desired name, with or without .docx extension
+      - content (str): full documentation or explanation text
+
+    Returns:
+      - dict with 'message' and 'file_path'
+    """
+    try:
+        # Ensure .docx extension
+        name = filename.strip()
+        if not name.lower().endswith(".docx"):
+            name += ".docx"
+
+        # Prepare directory
+        dir_path = os.path.join("Documentation")
+        os.makedirs(dir_path, exist_ok=True)
+
+        # Full file path
+        file_path = os.path.join(dir_path, name)
+
+        # Create and save .docx
+        doc = Document()
+        for line in content.splitlines():
+            doc.add_paragraph(line)
+        doc.save(file_path)
+
+        return {
+            "message": f"✅ Documentation saved to '{file_path}'.",
+            "file_path": file_path
+        }
+
+    except Exception as e:
+        return {
+            "message": f"❌ Failed to save documentation: {e}"
+        }
+        
+
+# Define your agent with the tool included
 Generating_agent = Agent(
     name="Generating-Assistant",
     instructions="""
@@ -80,10 +125,22 @@ Generating_agent = Agent(
     tools=[generate_code_file]  # Attach the tool
 )
 
-# Define the parent agent to delegate tasks
+
+Documentation_agent = Agent(
+    name="Generating-Assistant",
+    instructions="""
+    you are coding assistant agent.if the user ask to generate/write the code then generate the code and if the user want to store that code then store the code
+""".strip(),
+    model=OpenAIChatCompletionsModel(
+        model='gemini-2.0-flash',
+        openai_client=client
+    ),
+    tools=[generate_code_file]  # Attach the tool
+)
+
 agent = Agent(
     name="Parent-Assistant",
-    instructions = """
+    instructions =  """
 You are ParentAssistant, the central coordinator. You oversee all user requests and delegate specialized tasks to child agents.
 
 1
@@ -98,8 +155,7 @@ You are ParentAssistant, the central coordinator. You oversee every user request
     ),
     handoffs=[Generating_agent],
 )
-
-# Chainlit chat history setup
+#Chainlit chat history setup
 auto_history: list
 
 @cl.on_chat_start
@@ -124,3 +180,4 @@ async def main(message: cl.Message):
     # update session history
     new_history = result.to_input_list()
     cl.user_session.set("chat_history", new_history)
+
