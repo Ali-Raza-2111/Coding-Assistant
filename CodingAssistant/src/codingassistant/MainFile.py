@@ -72,7 +72,7 @@ def generate_code_file(language: str, filename: str, code: str) -> Dict[str, str
 Generating_agent = Agent(
     name="Generating-Assistant",
     instructions="""
-    take the file name and file type and the code the user want to generate and then call the generate code file tool and stores the code
+    you are coding assistant agent.if the user ask to generate/write the code then generate the code and if the user want to store that code then store the code
 """.strip(),
     model=OpenAIChatCompletionsModel(
         model='gemini-2.0-flash',
@@ -83,7 +83,7 @@ Generating_agent = Agent(
 
 agent = Agent(
     name="Parent-Assistant",
-    instructions = """
+    instructions =  """
 You are ParentAssistant, the central coordinator. You oversee all user requests and delegate specialized tasks to child agents.
 
 1
@@ -98,16 +98,29 @@ You are ParentAssistant, the central coordinator. You oversee every user request
     ),
     handoffs=[Generating_agent],
 )
-# Chainlit message handler
+#Chainlit chat history setup
+auto_history: list
+
+@cl.on_chat_start
+async def on_chat_start():
+    # initialize session history
+    cl.user_session.set("chat_history", [])
+    await cl.Message(content="👋 Welcome! I am your coding assistant. How can I help you today?").send()
+
 @cl.on_message
 async def main(message: cl.Message):
-    try:
-        # Run the agent asynchronously with the user message
-        result = await Runner.run(agent, message.content)
+    # load and update history
+    history = cl.user_session.get("chat_history") or []
+    history.append({"role": "user", "content": message.content})
 
-        # Send the agent's final response back to Chainlit UI
-        await cl.Message(content=result.final_output).send()
+    # run agent with history
+    result = await Runner.run(agent, history)
+    reply = result.final_output
 
-    except Exception as e:
-        # Gracefully handle and display errors
-        await cl.Message(content=f"Error: {str(e)}").send()
+    # send reply
+    await cl.Message(content=reply).send()
+
+    # update session history
+    new_history = result.to_input_list()
+    cl.user_session.set("chat_history", new_history)
+
